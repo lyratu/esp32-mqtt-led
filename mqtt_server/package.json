@@ -1,0 +1,13 @@
+{
+  "name": "mqtt_server",
+  "version": "1.0.0",
+  "description": "MQTT broker with WebSocket support and H5 client",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "aedes": "^0.51.0",
+    "ws": "^8.18.0"
+  }
+}

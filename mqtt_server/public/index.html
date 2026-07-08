@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MQTT 广播客户端</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+        margin: 0;
+        min-height: 100vh;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 40px 20px;
+        color: #333;
+      }
+
+      .container {
+        width: 100%;
+        max-width: 960px;
+      }
+
+      header {
+        text-align: center;
+        margin-bottom: 30px;
+      }
+
+      header h1 {
+        margin: 0 0 8px;
+        font-size: 32px;
+        color: #fff;
+        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      }
+
+      header p {
+        margin: 0;
+        color: rgba(255, 255, 255, 0.85);
+        font-size: 15px;
+      }
+
+      .status-bar {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        background: rgba(255, 255, 255, 0.95);
+        padding: 10px 22px;
+        border-radius: 50px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+        font-weight: 500;
+        margin-bottom: 24px;
+      }
+
+      .status-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #dc3545;
+        transition: background 0.3s;
+      }
+
+      .status-dot.online {
+        background: #28a745;
+        box-shadow: 0 0 8px #28a745;
+      }
+      .status-dot.offline {
+        background: #dc3545;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+      }
+
+      @media (max-width: 720px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .card {
+        background: rgba(255, 255, 255, 0.96);
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+        display: flex;
+        flex-direction: column;
+      }
+
+      .card h2 {
+        margin: 0 0 18px;
+        font-size: 18px;
+        color: #444;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .control-panel {
+        align-items: stretch;
+      }
+
+      .control-panel p {
+        margin: 0 0 16px;
+        color: #666;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      button {
+        padding: 16px 28px;
+        font-size: 17px;
+        font-weight: 600;
+        color: #fff;
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+        border: none;
+        border-radius: 12px;
+        cursor: pointer;
+        box-shadow: 0 6px 16px rgba(0, 123, 255, 0.35);
+        transition:
+          transform 0.12s,
+          box-shadow 0.12s;
+      }
+
+      button:hover:not(:disabled) {
+        box-shadow: 0 8px 20px rgba(0, 123, 255, 0.45);
+      }
+
+      button:active:not(:disabled) {
+        transform: scale(0.96);
+        box-shadow: 0 3px 10px rgba(0, 123, 255, 0.35);
+      }
+
+      button:disabled {
+        background: #adb5bd;
+        cursor: not-allowed;
+        box-shadow: none;
+      }
+
+      .broadcast-btn {
+        margin-bottom: 18px;
+      }
+
+      .log-panel {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+
+      #log {
+        flex: 1;
+        min-height: 180px;
+        max-height: 260px;
+        overflow-y: auto;
+        background: #f8f9fa;
+        padding: 12px;
+        border-radius: 10px;
+        font-size: 13px;
+        line-height: 1.5;
+        color: #555;
+      }
+
+      .log-item {
+        margin: 4px 0;
+        padding: 6px 8px;
+        background: #fff;
+        border-radius: 6px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+      }
+
+      .device-list {
+        flex: 1;
+        min-height: 180px;
+        max-height: 320px;
+        overflow-y: auto;
+      }
+
+      .device-empty {
+        text-align: center;
+        color: #999;
+        padding: 40px 0;
+        font-size: 14px;
+      }
+
+      .device-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 14px;
+        margin-bottom: 10px;
+        background: #f8f9fa;
+        border-radius: 10px;
+        border-left: 4px solid #28a745;
+      }
+
+      .device-info {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        overflow: hidden;
+      }
+
+      .device-id {
+        font-weight: 600;
+        color: #333;
+        word-break: break-all;
+      }
+
+      .device-time {
+        font-size: 12px;
+        color: #888;
+      }
+
+      .device-badge {
+        flex-shrink: 0;
+        padding: 4px 10px;
+        background: #28a745;
+        color: #fff;
+        border-radius: 50px;
+        font-size: 12px;
+        font-weight: 500;
+      }
+
+      footer {
+        margin-top: 30px;
+        color: rgba(255, 255, 255, 0.7);
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>MQTT 广播控制台</h1>
+        <p>实时监控在线设备并发送广播消息</p>
+      </header>
+
+      <div style="text-align: center">
+        <div class="status-bar">
+          <span id="statusDot" class="status-dot offline"></span>
+          <span id="status">未连接</span>
+        </div>
+      </div>
+
+      <div class="grid">
+        <section class="card control-panel">
+          <h2>📡 广播控制</h2>
+          <p>
+            点击下方按钮向主题
+            <strong>device/broadcast</strong>
+            发送一条广播消息，所有订阅该主题的设备都会收到。
+          </p>
+          <button id="broadcastBtn" class="broadcast-btn" disabled>
+            发送广播
+          </button>
+
+          <h2 style="margin-top: 6px">📝 消息日志</h2>
+          <div id="log"></div>
+        </section>
+
+        <section class="card">
+          <h2>💻 已连接设备</h2>
+          <div id="deviceList" class="device-list">
+            <div class="device-empty">暂无在线设备</div>
+          </div>
+        </section>
+      </div>
+
+      <footer>MQTT Broker: <span id="brokerInfo">-</span></footer>
+    </div>
+
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script>
+      const statusEl = document.getElementById("status");
+      const statusDot = document.getElementById("statusDot");
+      const btn = document.getElementById("broadcastBtn");
+      const logEl = document.getElementById("log");
+      const deviceListEl = document.getElementById("deviceList");
+      const brokerInfoEl = document.getElementById("brokerInfo");
+      const topic = "device/broadcast";
+      const onlineTopic = "device/online";
+      const brokerUrl = "ws://" + window.location.hostname + ":8080";
+
+      function addLog(msg) {
+        const div = document.createElement("div");
+        div.className = "log-item";
+        div.textContent = new Date().toLocaleTimeString() + " " + msg;
+        logEl.prepend(div);
+      }
+
+      function formatDuration(ms) {
+        const s = Math.floor(ms / 1000);
+        if (s < 60) return s + " 秒";
+        const m = Math.floor(s / 60);
+        if (m < 60) return m + " 分钟";
+        const h = Math.floor(m / 60);
+        return h + " 小时 " + (m % 60) + " 分钟";
+      }
+
+      function renderDevices(devices) {
+        deviceListEl.innerHTML = "";
+        if (!devices || devices.length === 0) {
+          deviceListEl.innerHTML =
+            '<div class="device-empty">暂无在线设备</div>';
+          return;
+        }
+        const now = Date.now();
+        devices.forEach((device) => {
+          const item = document.createElement("div");
+          item.className = "device-item";
+          const connectedAt = new Date(device.connectedAt).toLocaleString();
+          const duration = formatDuration(now - device.connectedAt);
+          item.innerHTML = `
+                    <div class="device-info">
+                        <span class="device-id">${device.id}</span>
+                        <span class="device-time">上线：${connectedAt} · 已在线 ${duration}</span>
+                    </div>
+                    <span class="device-badge">在线</span>
+                `;
+          deviceListEl.appendChild(item);
+        });
+      }
+
+      brokerInfoEl.textContent = brokerUrl;
+
+      const client = mqtt.connect(brokerUrl);
+
+      client.on("connect", () => {
+        statusEl.textContent = "已连接";
+        statusDot.className = "status-dot online";
+        btn.disabled = false;
+        addLog("已连接 MQTT 服务器");
+
+        client.subscribe(topic, (err) => {
+          if (err) {
+            addLog("订阅失败: " + err.message);
+          } else {
+            addLog("已订阅主题: " + topic);
+          }
+        });
+
+        client.subscribe(onlineTopic, (err) => {
+          if (err) {
+            addLog("设备列表订阅失败: " + err.message);
+          } else {
+            addLog("已订阅设备列表: " + onlineTopic);
+          }
+        });
+      });
+
+      client.on("message", (t, payload) => {
+        if (t === onlineTopic) {
+          try {
+            const devices = JSON.parse(payload.toString());
+            renderDevices(devices);
+          } catch (e) {
+            addLog("设备列表解析失败");
+          }
+        } else {
+          addLog("收到 [" + t + "]: " + payload.toString());
+        }
+      });
+
+      client.on("error", (err) => {
+        statusEl.textContent = "连接错误";
+        statusDot.className = "status-dot offline";
+        addLog("错误: " + err.message);
+      });
+
+      client.on("close", () => {
+        statusEl.textContent = "连接已断开";
+        statusDot.className = "status-dot offline";
+        btn.disabled = true;
+        addLog("连接断开");
+      });
+
+      btn.addEventListener("click", () => {
+        const msg = "broadcast_" + Date.now();
+        client.publish(topic, msg, (err) => {
+          if (err) {
+            addLog("发送失败: " + err.message);
+          } else {
+            addLog("已发送广播: " + msg);
+          }
+        });
+      });
+    </script>
+  </body>
+</html>
