@@ -50,7 +50,7 @@ function publishOnlineList() {
         connectedAt: d.connectedAt
     }));
     const payload = Buffer.from(JSON.stringify(list));
-    aedes.publish({ topic: ONLINE_TOPIC, payload, qos: 0, retain: false }, (err) => {
+    aedes.publish({ topic: ONLINE_TOPIC, payload, qos: 0, retain: true }, (err) => {
         if (err) console.error('广播在线设备列表失败:', err.message);
     });
 }
