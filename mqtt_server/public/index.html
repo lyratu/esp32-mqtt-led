@@ -145,6 +145,16 @@
         box-shadow: none;
       }
 
+      button.secondary {
+        padding: 10px 18px;
+        font-size: 14px;
+        background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+        box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+      }
+      button.secondary:hover:not(:disabled) {
+        box-shadow: 0 6px 16px rgba(108, 117, 125, 0.4);
+      }
+
       .broadcast-btn {
         margin-bottom: 18px;
       }
@@ -234,13 +244,176 @@
         color: rgba(255, 255, 255, 0.7);
         font-size: 13px;
       }
+
+      /* Agent list styles */
+      .agent-list {
+        flex: 1;
+        min-height: 180px;
+        max-height: 320px;
+        overflow-y: auto;
+      }
+
+      .agent-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 14px;
+        margin-bottom: 10px;
+        background: #f8f9fa;
+        border-radius: 10px;
+        border-left: 4px solid #adb5bd;
+        transition: border-color 0.3s, background 0.3s;
+      }
+
+      .agent-item.working {
+        border-left-color: #007bff;
+        background: #e8f4ff;
+      }
+      .agent-item.idle {
+        border-left-color: #28a745;
+      }
+      .agent-item.offline {
+        border-left-color: #dc3545;
+      }
+      .agent-item.active {
+        background: #fff;
+        box-shadow: 0 2px 8px rgba(0, 123, 255, 0.12);
+      }
+
+      .agent-info {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        overflow: hidden;
+      }
+
+      .agent-name {
+        font-weight: 600;
+        color: #333;
+      }
+
+      .agent-meta {
+        font-size: 12px;
+        color: #888;
+      }
+
+      .agent-status {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-shrink: 0;
+      }
+
+      .agent-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #adb5bd;
+      }
+      .agent-dot.idle {
+        background: #28a745;
+        box-shadow: 0 0 6px #28a745;
+      }
+      .agent-dot.working {
+        background: #007bff;
+        box-shadow: 0 0 6px #007bff;
+        animation: pulse 1s infinite;
+      }
+
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+      }
+
+      .agent-label {
+        font-size: 12px;
+        font-weight: 500;
+        padding: 3px 8px;
+        border-radius: 50px;
+      }
+      .agent-label.working {
+        background: #cce5ff;
+        color: #004085;
+      }
+      .agent-label.idle {
+        background: #d4edda;
+        color: #155724;
+      }
+      .agent-label.offline {
+        background: #f8d7da;
+        color: #721c24;
+      }
+
+      /* Switch */
+      .switch {
+        position: relative;
+        display: inline-block;
+        width: 44px;
+        height: 24px;
+        flex-shrink: 0;
+      }
+      .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+      .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ccc;
+        transition: 0.3s;
+        border-radius: 24px;
+      }
+      .slider:before {
+        position: absolute;
+        content: "";
+        height: 18px;
+        width: 18px;
+        left: 3px;
+        bottom: 3px;
+        background-color: white;
+        transition: 0.3s;
+        border-radius: 50%;
+      }
+      .switch input:checked + .slider {
+        background-color: #28a745;
+      }
+      .switch input:checked + .slider:before {
+        transform: translateX(20px);
+      }
+
+      .led-state {
+        margin-top: 12px;
+        padding: 10px 14px;
+        background: #f8f9fa;
+        border-radius: 10px;
+        font-size: 13px;
+        color: #666;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .led-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #28a745;
+      }
+      .led-dot.blinking {
+        background: #007bff;
+        animation: pulse 1s infinite;
+      }
     </style>
   </head>
   <body>
     <div class="container">
       <header>
         <h1>MQTT 广播控制台</h1>
-        <p>实时监控在线设备并发送广播消息</p>
+        <p>通过 Multica CLI 监控 agent 状态，实时驱动 ESP32 LED</p>
       </header>
 
       <div style="text-align: center">
@@ -252,17 +425,30 @@
 
       <div class="grid">
         <section class="card control-panel">
-          <h2>📡 广播控制</h2>
+          <h2>🤖 Agent 状态监控</h2>
           <p>
-            点击下方按钮向主题
-            <strong>device/broadcast</strong>
-            发送一条广播消息，所有订阅该主题的设备都会收到。
+            数据来自 <code>multica agent list</code> 和 <code>multica runtime list</code>。
+            选择一个 agent 作为监听目标：<strong>working</strong> 时 LED 持续闪烁，<strong>idle</strong> 时 LED 常亮。
+          </p>
+
+          <div id="agentList" class="agent-list">
+            <div class="device-empty">正在加载 agent 列表...</div>
+          </div>
+
+          <div id="ledState" class="led-state">
+            <span id="ledDot" class="led-dot"></span>
+            <span id="ledLabel">LED: 未监听</span>
+          </div>
+
+          <h2 style="margin-top: 18px">📡 广播控制</h2>
+          <p>
+            点击下方按钮向主题 <strong>device/broadcast</strong> 发送广播消息，所有订阅该主题的设备都会收到。
           </p>
           <button id="broadcastBtn" class="broadcast-btn" disabled>
             发送广播
           </button>
 
-          <h2 style="margin-top: 6px">📝 消息日志</h2>
+          <h2 style="margin-top: 18px">📝 消息日志</h2>
           <div id="log"></div>
         </section>
 
@@ -285,15 +471,26 @@
       const logEl = document.getElementById("log");
       const deviceListEl = document.getElementById("deviceList");
       const brokerInfoEl = document.getElementById("brokerInfo");
+      const agentListEl = document.getElementById("agentList");
+      const ledDot = document.getElementById("ledDot");
+      const ledLabel = document.getElementById("ledLabel");
+
       const topic = "device/broadcast";
       const onlineTopic = "device/online";
+      const cliTopic = "device/cli";
+      const agentTopic = "device/agent";
       const brokerUrl = "ws://" + window.location.hostname + ":8080";
+
+      let agentCache = [];
 
       function addLog(msg) {
         const div = document.createElement("div");
         div.className = "log-item";
         div.textContent = new Date().toLocaleTimeString() + " " + msg;
         logEl.prepend(div);
+        while (logEl.children.length > 100) {
+          logEl.removeChild(logEl.lastChild);
+        }
       }
 
       function formatDuration(ms) {
@@ -303,6 +500,12 @@
         if (m < 60) return m + " 分钟";
         const h = Math.floor(m / 60);
         return h + " 小时 " + (m % 60) + " 分钟";
+      }
+
+      function formatTime(ts) {
+        if (!ts) return "从未";
+        const d = new Date(ts);
+        return isNaN(d.getTime()) ? "未知" : d.toLocaleTimeString();
       }
 
       function renderDevices(devices) {
@@ -319,19 +522,158 @@
           const connectedAt = new Date(device.connectedAt).toLocaleString();
           const duration = formatDuration(now - device.connectedAt);
           item.innerHTML = `
-                    <div class="device-info">
-                        <span class="device-id">${device.id}</span>
-                        <span class="device-time">上线：${connectedAt} · 已在线 ${duration}</span>
-                    </div>
-                    <span class="device-badge">在线</span>
-                `;
+            <div class="device-info">
+              <span class="device-id">${device.id}</span>
+              <span class="device-time">上线：${connectedAt} · 已在线 ${duration}</span>
+            </div>
+            <span class="device-badge">在线</span>
+          `;
           deviceListEl.appendChild(item);
         });
       }
 
+      function statusClass(status) {
+        if (status === "working") return "working";
+        if (status === "idle") return "idle";
+        if (status === "online") return "idle";
+        return "offline";
+      }
+
+      function statusLabel(status) {
+        if (status === "working") return "进行中";
+        if (status === "idle") return "在线";
+        if (status === "online") return "在线";
+        return "离线";
+      }
+
+      function mergeAgents(list) {
+        if (!Array.isArray(list)) return;
+        list.forEach((incoming) => {
+          const idx = agentCache.findIndex((a) => a.name === incoming.name);
+          if (idx >= 0) {
+            agentCache[idx] = { ...agentCache[idx], ...incoming };
+          } else {
+            agentCache.push(incoming);
+          }
+        });
+        const names = new Set(list.map((a) => a.name));
+        agentCache = agentCache.filter((a) => names.has(a.name));
+      }
+
+      function updateLEDState() {
+        const active = agentCache.find((a) => a.active);
+        if (!active) {
+          ledDot.className = "led-dot";
+          ledLabel.textContent = "LED: 未监听";
+          return;
+        }
+        const status = active.status;
+        if (status === "working") {
+          ledDot.className = "led-dot blinking";
+          ledLabel.textContent = "LED: 闪烁（" + active.name + " 进行中）";
+        } else {
+          ledDot.className = "led-dot";
+          ledLabel.textContent = "LED: 常亮（" + active.name + " " + statusLabel(status) + "）";
+        }
+      }
+
+      function renderAgents(agents) {
+        if (agents) mergeAgents(agents);
+
+        agentListEl.innerHTML = "";
+        if (agentCache.length === 0) {
+          agentListEl.innerHTML =
+            '<div class="device-empty">暂无 agent（请确保已安装 multica CLI 并登录）</div>';
+          updateLEDState();
+          return;
+        }
+
+        agentCache.forEach((agent) => {
+          const cls = statusClass(agent.status);
+          const isActive = agent.active;
+          const runtimeInfo = agent.provider
+            ? agent.provider + (agent.version ? " · " + agent.version : "")
+            : agent.runtimeMode || "";
+          const lastSeen = agent.lastSeen
+            ? "检测: " + formatTime(agent.lastSeen)
+            : "";
+
+          const item = document.createElement("div");
+          item.className = `agent-item ${cls} ${isActive ? "active" : ""}`;
+          item.innerHTML = `
+            <div class="agent-info">
+              <span class="agent-name">${agent.name}</span>
+              <span class="agent-meta">${runtimeInfo} · ${statusLabel(agent.status)} · ${lastSeen}</span>
+            </div>
+            <div class="agent-status">
+              <span class="agent-dot ${cls}"></span>
+              <span class="agent-label ${cls}">${statusLabel(agent.status)}</span>
+              <label class="switch" title="启动监听">
+                <input type="checkbox" data-name="${agent.name}" ${isActive ? "checked" : ""} />
+                <span class="slider"></span>
+              </label>
+            </div>
+          `;
+          agentListEl.appendChild(item);
+        });
+
+        agentListEl.querySelectorAll('.agent-status input[type="checkbox"]').forEach((cb) => {
+          cb.addEventListener("change", () => setActiveAgent(cb.dataset.name, cb.checked));
+        });
+
+        updateLEDState();
+      }
+
+      async function setActiveAgent(name, checked) {
+        agentCache.forEach((a) => {
+          a.active = a.name === name && checked;
+        });
+        renderAgents();
+
+        const target = checked ? name : "";
+        try {
+          const url = checked
+            ? "/api/agents/active"
+            : "/api/agents/active";
+          const method = checked ? "POST" : "DELETE";
+          const body = checked ? JSON.stringify({ name: target }) : null;
+          const res = await fetch(url, {
+            method,
+            headers: body ? { "Content-Type": "application/json" } : {},
+            body,
+          });
+          const data = await res.json();
+          if (data.ok) {
+            renderAgents(data.list);
+            if (target) {
+              addLog("已启动监听 agent: " + target);
+            } else {
+              addLog("已关闭 agent 监听");
+            }
+          } else {
+            addLog("切换监听失败");
+          }
+        } catch (e) {
+          addLog("切换监听失败: " + e.message);
+        }
+      }
+
+      async function loadAgents() {
+        try {
+          const res = await fetch("/api/agents");
+          const list = await res.json();
+          renderAgents(list);
+        } catch (e) {
+          addLog("加载 agent 列表失败: " + e.message);
+        }
+      }
+
       brokerInfoEl.textContent = brokerUrl;
 
-      const client = mqtt.connect(brokerUrl);
+      const client = mqtt.connect(brokerUrl, {
+        reconnectPeriod: 3000,
+        connectTimeout: 10 * 1000,
+      });
 
       client.on("connect", () => {
         statusEl.textContent = "已连接";
@@ -339,33 +681,39 @@
         btn.disabled = false;
         addLog("已连接 MQTT 服务器");
 
-        client.subscribe(topic, (err) => {
-          if (err) {
-            addLog("订阅失败: " + err.message);
-          } else {
-            addLog("已订阅主题: " + topic);
-          }
+        [topic, onlineTopic, cliTopic, agentTopic].forEach((t) => {
+          client.subscribe(t, (err) => {
+            if (err) {
+              addLog("订阅失败 [" + t + "]: " + err.message);
+            } else {
+              addLog("已订阅主题: " + t);
+            }
+          });
         });
 
-        client.subscribe(onlineTopic, (err) => {
-          if (err) {
-            addLog("设备列表订阅失败: " + err.message);
-          } else {
-            addLog("已订阅设备列表: " + onlineTopic);
-          }
-        });
+        loadAgents();
       });
 
       client.on("message", (t, payload) => {
+        const text = payload.toString();
         if (t === onlineTopic) {
           try {
-            const devices = JSON.parse(payload.toString());
+            const devices = JSON.parse(text);
             renderDevices(devices);
           } catch (e) {
             addLog("设备列表解析失败");
           }
+        } else if (t === agentTopic) {
+          try {
+            const agents = JSON.parse(text);
+            renderAgents(agents);
+          } catch (e) {
+            addLog("Agent 列表解析失败");
+          }
+        } else if (t === cliTopic) {
+          addLog("LED 命令: " + text);
         } else {
-          addLog("收到 [" + t + "]: " + payload.toString());
+          addLog("收到 [" + t + "]: " + text);
         }
       });
 
@@ -382,6 +730,10 @@
         addLog("连接断开");
       });
 
+      client.on("reconnect", () => {
+        addLog("正在重新连接 MQTT...");
+      });
+
       btn.addEventListener("click", () => {
         const msg = "broadcast_" + Date.now();
         client.publish(topic, msg, (err) => {
@@ -392,6 +744,13 @@
           }
         });
       });
+
+      // Polling fallback to keep the UI fresh
+      setInterval(() => {
+        if (client.connected) {
+          loadAgents();
+        }
+      }, 5000);
     </script>
   </body>
 </html>

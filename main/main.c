@@ -1,5 +1,6 @@
 #include <WiFi.h>
 #include <PubSubClient.h>
+#include <string.h>
 
 #define LED_PIN             6
 #define BLINK_MS            200
@@ -9,15 +10,36 @@ const char* ssid     = "Danke";        // 改成你的 2.4GHz 热点名称
 const char* password = "wifi.danke.life";
 const char* mqtt_server = "192.168.199.145";  // 改成运行 MQTT 服务器的电脑 IP
 const char* topic    = "device/broadcast";
+const char* cli_topic = "device/cli";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-unsigned long blinkUntil = 0;
+// cliBlinking is a persistent state: once the active CLI reports "running",
+// the LED keeps blinking until the server sends "solid" (completed/idle).
+bool cliBlinking = false;
+unsigned long broadcastBlinkUntil = 0;
 
 void mqtt_callback(char* topic, byte* payload, unsigned int length)
 {
-    blinkUntil = millis() + BROADCAST_BLINK_MS;
+    // Make a null-terminated copy so strstr is safe.
+    char buf[128];
+    unsigned int copyLen = length < sizeof(buf) - 1 ? length : sizeof(buf) - 1;
+    memcpy(buf, payload, copyLen);
+    buf[copyLen] = '\0';
+
+    if (strcmp(topic, cli_topic) == 0) {
+        if (strstr(buf, "\"blink\"") != NULL) {
+            // Active CLI is running: blink continuously.
+            cliBlinking = true;
+        } else if (strstr(buf, "\"solid\"") != NULL) {
+            // Active CLI completed or is idle: stop blinking and stay solid.
+            cliBlinking = false;
+        }
+    } else {
+        // Broadcast messages still blink for a fixed duration.
+        broadcastBlinkUntil = millis() + BROADCAST_BLINK_MS;
+    }
 }
 
 void mqtt_reconnect(void)
@@ -25,6 +47,7 @@ void mqtt_reconnect(void)
     while (!client.connected()) {
         if (client.connect("esp32c3_client")) {
             client.subscribe(topic);
+            client.subscribe(cli_topic);
         } else {
             delay(5000);
         }
@@ -58,8 +81,13 @@ void loop(void)
     }
     client.loop();
 
-    // 收到 MQTT 广播后闪烁一段时间
-    if (millis() < blinkUntil) {
+    // Decide whether to blink:
+    // 1. Active CLI is running -> continuous blinking.
+    // 2. Broadcast received -> blink for a fixed duration.
+    // 3. Otherwise -> solid on.
+    bool shouldBlink = cliBlinking || (millis() < broadcastBlinkUntil);
+
+    if (shouldBlink) {
         digitalWrite(LED_PIN, HIGH);
         delay(BLINK_MS);
         digitalWrite(LED_PIN, LOW);
